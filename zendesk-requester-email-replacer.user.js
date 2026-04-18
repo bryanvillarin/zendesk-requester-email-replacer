@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zendesk Requester Email Replacer
 // @namespace    https://github.com/bryanvillarin/zendesk-requester-email-replacer
-// @version      1.4
+// @version      1.5
 // @description  Replaces requester display names with email addresses in Zendesk Support list views and ticket pages
 // @author       Bryan Villarin
 // @homepage     https://bryanvillarin.link
@@ -287,6 +287,7 @@
         }
       } catch (e) {
         console.error("[ZD Email]", e);
+        lastPath = null; // Reset so the poll retries on next tick
       }
     }, POLL_MS);
   })();

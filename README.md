@@ -32,6 +32,7 @@ The script runs automatically. No config needed.
 
 | Version | Changes |
 |---------|---------|
+| **1.5** | Fixed poll recovery — resets on `waitFor` timeout so the script retries instead of staying idle. |
 | **1.4** | Fixed timing issue on ticket pages — retries replacement for late-rendering elements. |
 | **1.3** | Fixed multi-tab ticket bug — uses name matching instead of first-element targeting. Added sidebar requester replacement on ticket pages. |
 | **1.2** | Added single ticket page support — replaces requester name at the top of the ticket. |
