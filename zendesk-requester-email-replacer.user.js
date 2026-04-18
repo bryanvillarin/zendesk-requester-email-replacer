@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zendesk Requester Email Replacer
 // @namespace    https://github.com/bryanvillarin/zendesk-requester-email-replacer
-// @version      1.5
+// @version      1.6
 // @description  Replaces requester display names with email addresses in Zendesk Support list views and ticket pages
 // @author       Bryan Villarin
 // @homepage     https://bryanvillarin.link
@@ -18,22 +18,25 @@
 
   const VIEW_PATH_RE = /\/agent\/filters\/(\d+)/;
   const TICKET_PATH_RE = /\/agent\/tickets\/(\d+)/;
+  const SEARCH_PATH_RE = /\/agent\/search\/\d+/;
   const ROW_ID_RE = /generic-table-row-(\d+)/;
   const TBODY = 'tbody[data-test-id="generic-table-body"]';
+  const GENERIC_TABLE = 'table[data-test-id="generic-table"]';
   const TICKET_REQ_SELECTOR = 'span[data-test-id="tabs-nav-item-users"] span.react-wrapper';
   const TICKET_SIDEBAR_REQ_SELECTOR = '[data-test-id="ticket-system-field-requester-select"] div[data-garden-id="typography.ellipsis"]';
   const DEBOUNCE_MS = 500;
   const POLL_MS = 1000;
 
-  const emailCache = new Map();       // userId → email
-  const nameCache = new Map();         // userId → name
-  const ticketReqCache = new Map();    // ticketId → requesterId
+  const emailCache = new Map();
+  const nameCache = new Map();
+  const ticketReqCache = new Map();
   let tableObserver = null;
   let ticketObserver = null;
   let isFetching = false;
   let lastPath = null;
-  
-// --- API ---
+  let lastSearch = null;
+
+  // --- API ---
 
   async function fetchViewData(viewId) {
     const r = await fetch(`/api/v2/views/${viewId}/execute.json`);
@@ -87,41 +90,50 @@
     }
   }
 
-// --- DOM: List Views ---
+  // --- DOM: List Views & Search ---
 
-  function getRequesterColIndex() {
-    const headers = document.querySelectorAll("thead th");
+  function getRequesterColIndexForTable(table) {
+    const headers = table.querySelectorAll("thead th");
     for (let i = 0; i < headers.length; i++) {
       if (headers[i].textContent.trim() === "Requester") return i;
     }
     return -1;
   }
 
-  function replaceNamesInView() {
-    const colIndex = getRequesterColIndex();
-    if (colIndex === -1) return [];
-
-    const unresolved = [];
+  function getSearchFingerprint() {
     const rows = document.querySelectorAll('tr[aria-describedby^="generic-table-row-"]');
+    if (!rows.length) return null;
+    return [...rows].map(r => r.getAttribute("aria-describedby")).join(",");
+  }
 
-    for (const row of rows) {
-      const m = row.getAttribute("aria-describedby")?.match(ROW_ID_RE);
-      if (!m) continue;
-      const ticketId = parseInt(m[1], 10);
+  function replaceNamesInView() {
+    const tables = document.querySelectorAll(GENERIC_TABLE);
+    const unresolved = [];
 
-      const cells = row.querySelectorAll("td");
-      const cell = cells[colIndex];
-      if (!cell || cell.dataset.emailReplaced === "true") continue;
+    for (const table of tables) {
+      const colIndex = getRequesterColIndexForTable(table);
+      if (colIndex === -1) continue;
 
-      const reqId = ticketReqCache.get(ticketId);
-      if (!reqId) { unresolved.push(ticketId); continue; }
+      const rows = table.querySelectorAll('tr[aria-describedby^="generic-table-row-"]');
+      for (const row of rows) {
+        const m = row.getAttribute("aria-describedby")?.match(ROW_ID_RE);
+        if (!m) continue;
+        const ticketId = parseInt(m[1], 10);
 
-      const email = emailCache.get(reqId);
-      if (!email) { unresolved.push(ticketId); continue; }
+        const cells = row.querySelectorAll("td");
+        const cell = cells[colIndex];
+        if (!cell || cell.dataset.emailReplaced === "true") continue;
 
-      cell.textContent = email;
-      if (cell.hasAttribute("aria-label")) cell.setAttribute("aria-label", email);
-      cell.dataset.emailReplaced = "true";
+        const reqId = ticketReqCache.get(ticketId);
+        if (!reqId) { unresolved.push(ticketId); continue; }
+
+        const email = emailCache.get(reqId);
+        if (!email) { unresolved.push(ticketId); continue; }
+
+        cell.textContent = email;
+        if (cell.hasAttribute("aria-label")) cell.setAttribute("aria-label", email);
+        cell.dataset.emailReplaced = "true";
+      }
     }
 
     return unresolved;
@@ -141,7 +153,7 @@
     }
   }
 
-// --- DOM: Single Ticket ---
+  // --- DOM: Single Ticket ---
 
   function replaceNamesOnTicket(ticketId) {
     const reqId = ticketReqCache.get(ticketId);
@@ -188,7 +200,7 @@
     });
   }
 
-// --- Utilities ---
+  // --- Utilities ---
 
   function debounce(fn, ms) {
     let t;
@@ -245,7 +257,19 @@
     replaceNamesInView();
     observeTable();
   }
-  
+
+  async function handleSearch() {
+    const rows = document.querySelectorAll('tr[aria-describedby^="generic-table-row-"]');
+    const ticketIds = [...new Set([...rows].map(r => {
+      const m = r.getAttribute("aria-describedby")?.match(ROW_ID_RE);
+      return m ? parseInt(m[1], 10) : null;
+    }).filter(Boolean))];
+    if (!ticketIds.length) return;
+    await fetchTickets(ticketIds);
+    replaceNamesInView();
+    observeTable();
+  }
+
   async function handleTicket(ticketId) {
     const id = parseInt(ticketId, 10);
     clearTicketReplacements();
@@ -263,13 +287,15 @@
     }, 500);
   }
 
-
   (function poll() {
     setInterval(async () => {
       const path = location.pathname;
-      if (path === lastPath) return;
-      lastPath = path;
-      disconnectAll();
+
+      if (path !== lastPath) {
+        lastPath = path;
+        disconnectAll();
+        if (!path.match(SEARCH_PATH_RE)) lastSearch = null;
+      }
 
       try {
         const viewMatch = path.match(VIEW_PATH_RE);
@@ -285,9 +311,19 @@
           await handleTicket(ticketMatch[1]);
           return;
         }
+
+        const searchMatch = path.match(SEARCH_PATH_RE);
+        if (searchMatch) {
+          const fingerprint = getSearchFingerprint();
+          if (fingerprint === lastSearch) return;
+          lastSearch = fingerprint;
+          await waitFor(TBODY);
+          await handleSearch();
+          return;
+        }
       } catch (e) {
         console.error("[ZD Email]", e);
-        lastPath = null; // Reset so the poll retries on next tick
+        lastPath = null;
       }
     }, POLL_MS);
   })();

@@ -1,11 +1,12 @@
 # Zendesk Requester Email Replacer
 
-Tampermonkey userscript that replaces requester display names with email addresses in Zendesk Support list views and ticket pages. Uses the Zendesk API to fetch and cache requester emails.
+Tampermonkey userscript that replaces requester display names with email addresses in Zendesk Support list views, ticket pages, and search results. Uses the Zendesk API to fetch and cache requester emails.
 
 ## How It Works
 
 1. **List views** (`/agent/filters/{id}`): Detects the "Requester" column, fetches requester emails via the Zendesk API, and replaces display names with email addresses.
 2. **Ticket pages** (`/agent/tickets/{id}`): Replaces the requester name in the tab bar and the ticket properties sidebar with their email address.
+3. **Search results** (`/agent/search/{id}`): Detects the "Requester" column and replaces display names with email addresses.
 
 Fetched emails are cached to minimize API calls.
 
@@ -14,7 +15,7 @@ Fetched emails are cached to minimize API calls.
 1. Install [Tampermonkey](https://www.tampermonkey.net/) for your browser.
 2. Click [`zendesk-requester-email-replacer.user.js`](https://raw.githubusercontent.com/bryanvillarin/zendesk-requester-email-replacer/main/zendesk-requester-email-replacer.user.js).
 3. When Tampermonkey prompts you to install, click **Install**.
-4. Navigate to a Zendesk Support list view or ticket page.
+4. Navigate to a Zendesk Support list view, ticket page, or search results page.
 
 The script runs automatically. No config needed.
 
@@ -32,6 +33,7 @@ The script runs automatically. No config needed.
 
 | Version | Changes |
 |---------|---------|
+| **1.6** | Added search results page support. Fixed requester column detection for views with multiple tables. |
 | **1.5** | Fixed poll recovery — resets on `waitFor` timeout so the script retries instead of staying idle. |
 | **1.4** | Fixed timing issue on ticket pages — retries replacement for late-rendering elements. |
 | **1.3** | Fixed multi-tab ticket bug — uses name matching instead of first-element targeting. Added sidebar requester replacement on ticket pages. |
