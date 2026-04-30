@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zendesk Requester Email Replacer
 // @namespace    https://github.com/bryanvillarin/zendesk-requester-email-replacer
-// @version      1.6
+// @version      1.7
 // @description  Replaces requester display names with email addresses in Zendesk Support list views and ticket pages
 // @author       Bryan Villarin
 // @homepage     https://bryanvillarin.link
@@ -79,6 +79,7 @@
 
   async function fetchEmails(userIds) {
     for (let i = 0; i < userIds.length; i += 100) {
+      if (i > 0) await new Promise(r => setTimeout(r, 200));
       const batch = userIds.slice(i, i + 100);
       const r = await fetch(`/api/v2/users/show_many.json?ids=${batch.join(",")}`);
       if (!r.ok) continue;

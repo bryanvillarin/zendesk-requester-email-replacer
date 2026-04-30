@@ -47,6 +47,7 @@ On a Zendesk Enterprise plan (700 requests/minute account-wide limit), this scri
 
 | Version | Changes |
 |---------|---------|
+| **1.7** | Added delay between batched API calls to smooth out request bursts. |
 | **1.6** | Added search results page support. Fixed requester column detection for views with multiple tables. |
 | **1.5** | Fixed poll recovery — resets on `waitFor` timeout so the script retries instead of staying idle. |
 | **1.4** | Fixed timing issue on ticket pages — retries replacement for late-rendering elements. |
