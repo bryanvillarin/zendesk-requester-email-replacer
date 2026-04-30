@@ -29,6 +29,20 @@ The script runs automatically. No config needed.
 | **Views without a Requester column** | Script does nothing — this is expected. |
 | **Users without an email** | The original display name is kept. |
 
+## API Usage
+
+This script makes Zendesk API calls to fetch requester emails. All calls are read-only (GET requests) and are minimized through in-session caching — already-fetched emails are reused without additional calls.
+
+| Action | API calls |
+|--------|-----------|
+| Loading a list view | Up to 2 (Execute View + Show Many Users) |
+| Paginating a list view | Up to 2 (Show Many Tickets + Show Many Users) |
+| Loading a ticket page | Up to 2 (Show Ticket + Show Many Users) |
+| Loading search results | Up to 2 (Show Many Tickets + Show Many Users) |
+| Revisiting any page with cached requesters | 0–1 |
+
+On a Zendesk Enterprise plan (700 requests/minute account-wide limit), this script's footprint is negligible for small teams. If your instance is on a lower-tier plan or has many integrations already consuming API budget, monitor your `X-Rate-Limit-Remaining` response header before deploying broadly.
+
 ## Version History
 
 | Version | Changes |
